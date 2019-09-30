@@ -1,0 +1,334 @@
+---
+title: "Prestige Data Assignment"
+author: "Sergazy"
+date: "9/23/2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+(a) Loading the Prestige data and omitting the missing values, we have n = 98 and p = 5 for our
+first model which will include only the main effects.
+
+
+
+```{r }
+library("carData")
+library("car")
+data = na.omit(Prestige)
+prestige = data$prestige
+education = data$education
+income = data$income
+type = data$type
+fit = lm(prestige~education+income+type)
+summary(fit)
+```
+
+Now, we’ll test the hypothesis that the effect on prestige of an occupation being white collar is
+the same as the effect on prestige of the occupation being professional. We’ll use a significance
+level of 5%. To do this, we’ll consider the model where type has only two levels, blue collar, and
+1
+white collar/professional. We’ll combine the two levels “wc” and “prof” into a single combined level
+“wcProf”. In doing this, we lose one degree of freedom so q = 1. We can use an F test to determine
+if the impact on prestige of an occupation being White Collar is the same as the effect on prestige
+of an occupation being Professional.
+```{r}
+# Create a new factor with "wc" and "prof" combined into one level
+combinedType = type
+levels(combinedType)[levels(combinedType)=="wc"] = "wcProf"
+levels(combinedType)[levels(combinedType)=="prof"] = "wcProf"
+fitComb = lm(prestige~education+income+combinedType)
+summary(fitComb)
+```
+
+
+
+```{r}
+SSres = sum(fit$residuals^2)
+SSresH0 = sum(fitComb$residuals^2)
+F = ((SSresH0 - SSres) / (SSres)) * ((98-5)/(1))
+1-pf(F, 1, 98-5)
+```
+
+
+Our P-value is 0.0021, so we reject the null hypothesis that the effect on prestige is the same for
+both white collar and professional occupations. We have significant evidence that the effects are
+different, and we prefer our original model.
+We can alternatively ask R to run this hypothesis test, and we will get the exact same result:
+
+```{r}
+linearHypothesis(fit, "typeprof = typewc")
+```
+
+The P-value matches our value from the calculation.
+(b) Now let’s test the hypothesis that type has no effect on the prestige of an occupation. We’ll
+make a new fit corresponding to our null hypothesis which excludes type. Then we’ll perform an
+F test with a significance level of 5%. In this case q = 2 since we lose two degrees of freedom by
+reducing to the null hypothesis model.
+
+```{r}
+fitNoType = lm(prestige~education+income)
+summary(fitNoType)
+SSres = sum(fit$residuals^2)
+SSresH0 = sum(fitNoType$residuals^2)
+F = ((SSresH0 - SSres) / (SSres)) * ((98-5)/(2))
+1-pf(F, 2, 98-5)
+```
+
+Since our P-value is 0.0040 we reject the null hypothesis. We have statistically significant evidence
+that the type does have an effect on the prestige of an occupation.
+We can verify our result with R’s calculation:
+```{r}
+linearHypothesis(fit, c("typeprof = 0", "typewc = 0"))
+```
+
+Again the P-value matches exactly.
+Next let’s test the hypothesis that the regression constant for income is 0.002 and the regression
+constant for education is 2. In this case q = 2 when we fix both the education and income
+coefficients.
+
+```{r}
+fitH0 = lm(prestige-2*education -0.002*income ~ type)
+summary(fitH0)
+SSres = sum(fit$residuals^2)
+SSresH0 = sum(fitH0$residuals^2)
+F = ((SSresH0 - SSres) / (SSres)) * ((98-5)/(2))
+1-pf(F, 2, 98-5)
+
+```
+
+
+Our P-value is < 0.0001, so we reject the null hypothesis and conclude that the pair of regression
+coefficients for income and education is not 0.002, 2.
+Again we can check our value with R’s calculation:
+
+```{r}
+linearHypothesis(fit, c("education = 2", "income = 0.002"))
+```
+
+And again the P-value matches our calculation.
+(c) Let’s now consider the model where income and education are allowed to have interactions
+with type.
+
+```{r}
+intFit = lm(prestige~type*(education+income))
+summary(intFit)
+```
+
+I prefer this model to the model we used in part (a) and (b), because it allows us to see the
+interactions, several of which are significant at the 5% level. For example, this model suggests that
+higher income makes a greater impact on the prestige of blue collar occupations than it does for
+white collar occupations and professional occupations. This perhaps makes intuitive sense to us.
+Blue collar occupations typically have low prestige, but higher paying blue collar occupations tend
+to have higher prestige (for example Tool Die Makers in this data set). Professional occupations on
+the other hand tend to have higher prestige overall, and even some of the lower paying professional
+occupations still have high prestige (for example Pychologists and Chemists in this data set).
+
+(d) In this model with the interactions, we’ll test the hypothesis that income has no effect on
+prestige for white collar occupations. We will do this with a T test as described in the course notes,
+being careful to add the vectors for “income” and “typewc:income” to get the effective coefficient
+for income for white collar occupations.
+```{r}
+effCoef = intFit$coef[["income"]] + intFit$coef[["typewc:income"]]
+cSigma = (vcov(intFit)["income", "income"]
++ vcov(intFit)["typewc:income", "typewc:income"]
++ 2*vcov(intFit)["income", "typewc:income"])
+t = (effCoef) / sqrt(cSigma)
+2*(1-pt(t, 89)) # n - p = 89
+```
+
+Since our P-value is 0.0411, we reject the null hypothesis and conclude that income does have an
+effect on prestige for white collar occupations.
+We can compare with R’s calculation:
+
+```{r}
+linearHypothesis(intFit, 'typewc:income + income = 0')
+```
+
+Again the P-value matches exactly with our calculations.
+(e) We will use our model from (c) to predict the prestige of an occupation that has an average
+income of 5000$, average education of 12, and is a white collar occupation.
+
+```{r}
+newjob = c(1, 0, 1, 12, 5000, 0, 12, 0, 5000)
+estPrestige = sum(intFit$coefficients * newjob)
+estPrestige
+```
+Based on our linear model in (c), we estimate the prestige to be 48.04 for this occupation.
+(f) Next we’ll test the null hypothesis that in the model in (c) the interactions between education
+and type are not significant, again at a 5% significance level. In the reduced model we lose 2 degrees
+of freedom, so q = 2.
+```{r}
+fitH0 = lm(prestige~type*income + education)
+summary(fitH0)
+SSres = sum(intFit$residuals^2)
+SSresH0 = sum(fitH0$residuals^2)
+F = ((SSresH0 - SSres) / (SSres)) * ((98-9)/(2))
+1-pf(F, 2, 98-9)
+```
+
+Our P-value is 0.0556 so we fail to reject the null hypothesis. We do not have statistically significant
+evidence that the interactions between education and type are not zero.
+We can compare with R’s calculation:
+
+```{r}
+linearHypothesis(intFit, c("typeprof:education = 0", "typewc:education = 0"))
+```
+We get the exact same P-value.
+(g) First we’ll fix the model to simulate from, and define a function in R to simulate the new
+prestige values.
+
+
+```{r}
+interc = fit$coef[["(Intercept)"]]
+educ = fit$coef[["education"]]
+inc = fit$coef[["income"]]
+prof = fit$coef[["typeprof"]]
+wc = fit$coef[["typewc"]]
+stderr = 7.095
+bcdata = subset(data, data$type == "bc")
+wcdata = subset(data, data$type == "wc")
+profdata = subset(data, data$type == "prof")
+simulateData = function() {
+simPrestigeBC = (interc + bcdata$education*educ + bcdata$income*inc
++ rnorm(44, mean=0, sd=stderr))
+simPrestigeWC = (interc + wcdata$education*educ + wcdata$income*inc
++ wc + rnorm(23, mean=0, sd=stderr))
+simPrestigeProf = (interc + profdata$education*educ + profdata$income*inc
++ prof + rnorm(31, mean=0, sd=stderr))
+simData = data
+simData$prestige = c(simPrestigeBC, simPrestigeWC, simPrestigeProf)
+return(simData)
+}
+```
+
+Next we’ll define a function to run Alice’s method:
+
+```{r}
+alice = function(simData) {
+aFit = lm(simData$prestige ~ simData$type * (simData$education + simData$income))
+mm = model.matrix(aFit)
+while(TRUE) {
+aFit = lm(simData$prestige ~ mm - 1) # -1 removes the NA intercept
+remainingCoef = names(aFit$coef)
+highestPval = 0
+highestindex = 0
+index = 0
+for (coef in remainingCoef) {
+index = index + 1
+Pval = linearHypothesis(aFit, paste(coef, " = 0"))$`Pr(>F)`[2]
+if (Pval > 0.05 && Pval > highestPval) {
+highestPval = Pval
+highest = coef
+highestindex = index
+}
+}
+if (highestindex == 0) {
+break # nothing left to remove
+}
+mm = mm[,-highestindex]
+}
+# summary(aFit)
+return(aFit)
+}
+```
+Next, the function to run Bob’s method:
+
+```{r}
+bob = function(simData) {
+interactionFit = lm(simData$prestige ~ simData$type
+* (simData$education + simData$income))
+mm = model.matrix(interactionFit)
+fullFit = lm(simData$prestige ~ mm - 1)
+includedCovariates = c()
+coefNames = names(fullFit$coef)
+while(TRUE) {
+bestPval = 1
+bestIndex = 0
+for (i in 1:9) {
+if (!(i %in% includedCovariates)) {
+covToTry = c(includedCovariates, i)
+mmTry = mm[,covToTry]
+bFit = lm(simData$prestige ~ mmTry - 1)
+coef = names(bFit$coef)[length(includedCovariates)+1]
+Pval = linearHypothesis(bFit, paste(coef, " = 0"))$`Pr(>F)`[2]
+if (Pval < 0.05 && Pval < bestPval) {
+bestPval = Pval
+bestIndex = i
+}
+}
+}
+if (bestIndex == 0) {
+break # Nothing left to add
+}
+includedCovariates = c(includedCovariates, bestIndex)
+}
+mm = mm[,includedCovariates]
+bFit = lm(simData$prestige ~ mm - 1)
+return (bFit)
+}
+```
+
+One more function which will take as an input one of the models generated by Alice’s or Bob’s
+method and return the predicted prestige for the occupation in part (e).
+
+```{r}
+predictPrestige = function(model) {
+modelInterc = 0
+if ("mm(Intercept)" %in% names(model$coef)) {
+modelInterc = model$coef[["mm(Intercept)"]]
+}
+modelWC = 0
+if ("mmsimData$typewc" %in% names(model$coef)) {
+modelWC = model$coef[["mmsimData$typewc"]]
+}
+modelEducation = 0
+if ("mmsimData$education" %in% names(model$coef)) {
+modelEducation = modelEducation + model$coef[["mmsimData$education"]]
+}
+if ("mmsimData$typewc:simData$education" %in% names(model$coef)) {
+modelEducation = (modelEducation
++ model$coef[["mmsimData$typewc:simData$education"]])
+}
+modelIncome = 0
+if ("mmsimData$income" %in% names(model$coef)) {
+modelIncome = modelIncome + model$coef[["mmsimData$income"]]
+}
+if ("mmsimData$typewc:simData$income" %in% names(model$coef)) {
+modelIncome = modelIncome + model$coef[["mmsimData$typewc:simData$income"]]
+}
+return (modelInterc + modelWC + modelEducation*12 + modelIncome*5000)
+}
+```
+
+Now we’re ready to simulate! Let’s start with Alice’s method:
+
+```{r}
+alicePredictions = replicate(1000, predictPrestige(alice(simulateData())))
+hist(alicePredictions)
+```
+Now we’ll simulate from Bob’s method:
+
+```{r}
+bobPredictions = replicate(1000, predictPrestige(bob(simulateData())))
+hist(bobPredictions)
+```
+
+The true value from the model we simulated from is
+```{r}
+truth = interc + wc + inc*5000 + educ*12
+truth
+```
+Let’s plot the residuals for this new occupation under each method of calculation
+
+```{r}
+hist(alicePredictions - truth)
+hist(bobPredictions - truth)
+```
+
+We see there are some subtle differences between the two methods. Both methods bias about 10
+below the occupations true prestige (based on the model we simulated from). Bob’s method has a
+higher variance, while Alice’s method had a lower variance and is more symmetric. Due to the
+higher variance Bob’s method occassionally gets better results, but overall Alice’s method performs
+better on average for this prediction based on (e).
